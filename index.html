@@ -2,12 +2,887 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Hello World!</title>
-
+    <title>ChuckAFile</title>
+    <link rel="stylesheet" href="src/index.css" />
+    <script src="http://localhost:3001/socket.io/socket.io.js"></script>
   </head>
   <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
-    <script type="module" src="/src/renderer.ts"></script>
+    <!-- Custom Window Controls -->
+    <div id="window-controls">
+      <div class="window-drag-area"></div>
+      <div class="window-buttons">
+        <button id="minimize-btn" class="window-btn">−</button>
+        <button id="maximize-btn" class="window-btn">□</button>
+        <button id="close-btn" class="window-btn">×</button>
+      </div>
+    </div>
+
+    <!-- Login/Register Screen -->
+    <div id="auth-screen" class="screen active">
+      <div class="auth-container">
+        <div class="auth-header">
+          <h1>ChuckAFile</h1>
+          <p>File sharing made easy with friends</p>
+        </div>
+        
+        <div class="auth-tabs">
+          <button id="login-tab" class="tab-btn active">Login</button>
+          <button id="register-tab" class="tab-btn">Register</button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="auth-form active">
+          <div class="form-group">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" required />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" required />
+          </div>
+          <button type="submit" class="btn-primary">Login</button>
+          <div id="login-error" class="error-message"></div>
+        </form>
+
+        <!-- Register Form -->
+        <form id="register-form" class="auth-form">
+          <div class="form-group">
+            <label for="register-username">Username</label>
+            <input type="text" id="register-username" required />
+          </div>
+          <div class="form-group">
+            <label for="register-password">Password</label>
+            <input type="password" id="register-password" required minlength="6" />
+          </div>
+          <div class="form-group">
+            <label for="register-confirm">Confirm Password</label>
+            <input type="password" id="register-confirm" required minlength="6" />
+          </div>
+          <button type="submit" class="btn-primary">Register</button>
+          <div id="register-error" class="error-message"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="app-screen" class="screen">
+      <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <h3>ChuckAFile</h3>
+            <div class="user-info">
+              <span id="current-username"></span>
+              <span id="current-friend-code"></span>
+            </div>
+          </div>
+          
+          <div class="sidebar-section">
+            <button id="home-btn" class="sidebar-btn active">🏠 Home</button>
+          </div>
+          
+          <div class="sidebar-section">
+            <div class="section-header">
+              <h4>Friend Requests</h4>
+              <span id="request-count" class="request-count" style="display: none;">0</span>
+            </div>
+            <div id="friend-requests" class="friend-requests">
+              <!-- Friend requests will be loaded here -->
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="section-header">
+              <h4>Friends</h4>
+              <button id="add-friend-btn" class="btn-small">+</button>
+            </div>
+            <div id="friends-list" class="friends-list">
+              <!-- Friends will be loaded here -->
+            </div>
+          </div>
+          
+          <div class="sidebar-footer">
+            <button id="logout-btn" class="btn-logout">Logout</button>
+          </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+          <div id="home-view" class="view active">
+            <div class="welcome-container">
+              <h2>Welcome to ChuckAFile!</h2>
+              <p>Share files and folders securely with your friends.</p>
+              <div class="feature-cards">
+                <div class="card">
+                  <h3>📤 Send Files</h3>
+                  <p>Send files and folders to your friends with a simple drag and drop.</p>
+                </div>
+                <div class="card">
+                  <h3>💬 Messages</h3>
+                  <p>Add context to your files with messages so friends know what they're for.</p>
+                </div>
+                <div class="card">
+                  <h3>🔒 Secure</h3>
+                  <p>All transfers are encrypted and only visible to you and your friends.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div id="chat-view" class="view">
+            <div class="chat-header">
+              <h3 id="chat-friend-name">Friend Name</h3>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+              <!-- Messages will be loaded here -->
+            </div>
+            <div class="chat-input">
+              <input type="text" id="message-input" placeholder="Type a message..." />
+              <button id="send-message-btn">Send</button>
+              <button id="send-file-btn">📎 File</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Friend Modal -->
+    <div id="add-friend-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add Friend</h3>
+          <button id="close-modal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Enter your friend's code to add them:</p>
+          <input type="text" id="friend-code-input" placeholder="Enter friend code" />
+          <div id="add-friend-error" class="error-message"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="cancel-add-friend" class="btn-secondary">Cancel</button>
+          <button id="confirm-add-friend" class="btn-primary">Add Friend</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unfriend Confirmation Modal -->
+    <div id="unfriend-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Unfriend User</h3>
+          <button id="close-unfriend-modal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to unfriend <strong id="unfriend-username"></strong>?</p>
+          <p style="color: #b9bbbe; font-size: 0.9rem;">You will no longer be able to send messages to each other. You can add them as a friend again later.</p>
+          <div id="unfriend-error" class="error-message"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="cancel-unfriend" class="btn-secondary">Cancel</button>
+          <button id="confirm-unfriend" class="btn-danger">Unfriend</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Fallback tab switching if TypeScript doesn't load
+      document.addEventListener('DOMContentLoaded', async () => {
+        console.log('DOM loaded, setting up tab switching');
+        
+        // WebSocket variables
+        let socket = null;
+        let currentUserId = null;
+        
+        // Make currentUserId globally accessible
+        window.currentUserId = null;
+
+        function initializeWebSocket(userId) {
+          if (socket) {
+            socket.disconnect();
+          }
+
+          socket = io('http://localhost:3001');
+          currentUserId = userId;
+          window.currentUserId = userId;
+
+          socket.on('connect', () => {
+            console.log('WebSocket connected');
+            socket.emit('join-room', userId.toString());
+            // Always refresh friend data when connecting/reconnecting
+            loadFriends();
+            loadFriendRequests();
+          });
+
+          // Listen for real-time friend events
+          socket.on('refresh-friends', () => {
+            console.log('Refreshing friends and friend requests');
+            loadFriends();
+            loadFriendRequests();
+          });
+
+          // Listen for real-time messages
+          socket.on('new-message', (message) => {
+            console.log('New message received:', message);
+            addMessageToChat(message);
+          });
+
+          socket.on('message-error', (error) => {
+            console.error('Message error:', error);
+            showNotification('Failed to send message', 'error');
+          });
+
+          socket.on('disconnect', () => {
+            console.log('WebSocket disconnected');
+          });
+
+          // Set up periodic refresh to catch any missed updates
+          if (window.friendRefreshInterval) {
+            clearInterval(window.friendRefreshInterval);
+          }
+          window.friendRefreshInterval = setInterval(() => {
+            console.log('Periodic friend data refresh');
+            loadFriends();
+            loadFriendRequests();
+          }, 10000); // Refresh every 10 seconds
+        }
+
+        function showNotification(message, type = 'info') {
+          // Create notification element
+          const notification = document.createElement('div');
+          notification.className = `notification notification-${type}`;
+          notification.textContent = message;
+          
+          // Add to page
+          document.body.appendChild(notification);
+          
+          // Remove after 5 seconds
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.parentNode.removeChild(notification);
+            }
+          }, 5000);
+        }
+
+        // Main app functionality - moved early for checkExistingAuth
+        async function loadFriends() {
+          try {
+            const data = await window.electronAPI.apiCall('/users/friends');
+            if (data.success) {
+              const friendsList = document.getElementById('friends-list');
+              friendsList.innerHTML = '';
+              
+              // Remove duplicates by creating a Set of unique friend IDs
+              const uniqueFriends = data.friends.filter((friend, index, self) => 
+                index === self.findIndex(f => f.id === friend.id)
+              );
+              
+              if (uniqueFriends.length === 0) {
+                friendsList.innerHTML = '<div class="no-friends">No friends yet. Add some friends to get started!</div>';
+                return;
+              }
+              
+              uniqueFriends.forEach(friend => {
+                const friendEl = document.createElement('div');
+                friendEl.className = 'friend-item';
+                friendEl.setAttribute('data-friend-id', friend.id);
+                friendEl.innerHTML = `
+                  <div class="friend-content">
+                    <div class="friend-name">${friend.username}</div>
+                    <button class="btn-unfriend" onclick="showUnfriendModal(${friend.id}, '${friend.username}')" title="Unfriend">✗</button>
+                  </div>
+                `;
+                friendEl.addEventListener('click', (e) => {
+                  // Don't open chat if clicking the unfriend button
+                  if (!e.target.classList.contains('btn-unfriend')) {
+                    openChat(friend);
+                  }
+                });
+                friendsList.appendChild(friendEl);
+              });
+            }
+          } catch (error) {
+            console.error('Failed to load friends:', error);
+          }
+        }
+
+        async function loadFriendRequests() {
+          try {
+            const data = await window.electronAPI.apiCall('/users/friend-requests');
+            if (data.success) {
+              const requestsEl = document.getElementById('friend-requests');
+              const countEl = document.getElementById('request-count');
+              
+              requestsEl.innerHTML = '';
+              
+              if (data.requests.length > 0) {
+                countEl.textContent = data.requests.length;
+                countEl.style.display = 'inline';
+                
+                data.requests.forEach(request => {
+                  const requestEl = document.createElement('div');
+                  requestEl.className = 'friend-request';
+                  requestEl.setAttribute('data-request-id', request.id);
+                  requestEl.innerHTML = `
+                    <div class="request-user">${request.username}</div>
+                    <div class="request-info">Friend Code: ${request.friend_code}</div>
+                    <div class="request-actions">
+                      <button class="btn-accept" onclick="acceptFriend(${request.id})" title="Accept">✓</button>
+                      <button class="btn-reject" onclick="rejectFriend(${request.id})" title="Reject">✗</button>
+                    </div>
+                  `;
+                  requestsEl.appendChild(requestEl);
+                });
+              } else {
+                countEl.style.display = 'none';
+                requestsEl.innerHTML = '<div class="no-requests">No pending friend requests</div>';
+              }
+            }
+          } catch (error) {
+            console.error('Failed to load friend requests:', error);
+            const requestsEl = document.getElementById('friend-requests');
+            requestsEl.innerHTML = '<div class="error-message">Failed to load friend requests</div>';
+          }
+        }
+
+        function addMessageToChat(message) {
+          // Only add message if we're currently viewing this conversation
+          if (!window.currentFriend) return;
+          
+          const isFromCurrentConversation = 
+            (message.sender_id === window.currentFriend.id && message.recipient_id === window.currentUserId) ||
+            (message.sender_id === window.currentUserId && message.recipient_id === window.currentFriend.id);
+            
+          if (!isFromCurrentConversation) return;
+
+          const chatMessages = document.getElementById('chat-messages');
+          if (!chatMessages) return;
+
+          // Check if message already exists to prevent duplicates
+          const existingMessage = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
+          if (existingMessage) return;
+
+          const messageEl = document.createElement('div');
+          messageEl.className = 'message';
+          messageEl.setAttribute('data-message-id', message.id);
+          
+          const time = new Date(message.created_at).toLocaleTimeString();
+          const isOwnMessage = message.sender_id === window.currentUserId;
+          
+          messageEl.classList.add(isOwnMessage ? 'message-own' : 'message-other');
+          
+          messageEl.innerHTML = `
+            <div class="message-header">
+              <span class="message-author">${message.sender_username}</span>
+              <span class="message-time">${time}</span>
+            </div>
+            <div class="message-content">${message.message_text}</div>
+          `;
+          
+          chatMessages.appendChild(messageEl);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Check if user is already logged in
+        await checkExistingAuth();
+
+        async function checkExistingAuth() {
+          const token = window.electronAPI.getItem('auth_token');
+          if (token) {
+            try {
+              console.log('Found existing token, verifying...');
+              const data = await window.electronAPI.apiCall('/auth/verify');
+              
+              if (data.success) {
+                console.log('Token valid, logging user in automatically');
+                // Switch to app screen
+                document.getElementById('auth-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('current-username').textContent = data.user.username;
+                document.getElementById('current-friend-code').textContent = 'Friend Code: ' + data.user.friendCode;
+                
+                // Initialize WebSocket connection
+                initializeWebSocket(data.user.id);
+                
+                // Load friends and requests
+                await loadFriends();
+                await loadFriendRequests();
+              } else {
+                console.log('Token invalid, removing...');
+                window.electronAPI.removeItem('auth_token');
+              }
+            } catch (error) {
+              console.log('Token verification failed:', error);
+              window.electronAPI.removeItem('auth_token');
+            }
+          }
+        }
+        
+        const loginTab = document.getElementById('login-tab');
+        const registerTab = document.getElementById('register-tab');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        
+        if (loginTab && registerTab && loginForm && registerForm) {
+          loginTab.addEventListener('click', () => {
+            console.log('Login tab clicked');
+            loginTab.classList.add('active');
+            registerTab.classList.remove('active');
+            loginForm.classList.add('active');
+            registerForm.classList.remove('active');
+          });
+          
+          registerTab.addEventListener('click', () => {
+            console.log('Register tab clicked');
+            registerTab.classList.add('active');
+            loginTab.classList.remove('active');
+            registerForm.classList.add('active');
+            loginForm.classList.remove('active');
+          });
+
+          // Add login form handler
+          loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Login form submitted');
+            
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            console.log('Login attempt:', username);
+            
+            try {
+              const data = await window.electronAPI.apiCall('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+              });
+              
+              console.log('Login response:', data);
+              
+              if (data.success) {
+                window.electronAPI.setItem('auth_token', data.token);
+                document.getElementById('auth-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('current-username').textContent = data.user.username;
+                document.getElementById('current-friend-code').textContent = 'Friend Code: ' + data.user.friendCode;
+                
+                // Initialize WebSocket connection
+                initializeWebSocket(data.user.id);
+                
+                // Load friends and requests after login
+                await loadFriends();
+                await loadFriendRequests();
+              } else {
+                document.getElementById('login-error').textContent = data.message;
+              }
+            } catch (error) {
+              console.error('Login error:', error);
+              document.getElementById('login-error').textContent = 'Login failed: ' + error.message;
+            }
+          });
+
+          // Add registration form handler
+          registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Register form submitted');
+            
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+            const confirm = document.getElementById('register-confirm').value;
+            
+            if (password !== confirm) {
+              document.getElementById('register-error').textContent = 'Passwords do not match';
+              return;
+            }
+            
+            try {
+              const data = await window.electronAPI.apiCall('/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+              });
+              
+              console.log('Register response:', data);
+              
+              if (data.success) {
+                window.electronAPI.setItem('auth_token', data.token);
+                document.getElementById('auth-screen').classList.remove('active');
+                document.getElementById('app-screen').classList.add('active');
+                document.getElementById('current-username').textContent = data.user.username;
+                document.getElementById('current-friend-code').textContent = 'Friend Code: ' + data.user.friendCode;
+                
+                // Initialize WebSocket connection
+                initializeWebSocket(data.user.id);
+                
+                // Load friends and requests after registration
+                await loadFriends();
+                await loadFriendRequests();
+              } else {
+                document.getElementById('register-error').textContent = data.message;
+              }
+            } catch (error) {
+              console.error('Register error:', error);
+              document.getElementById('register-error').textContent = 'Registration failed: ' + error.message;
+            }
+          });
+        } else {
+          console.error('Tab elements not found');
+        }
+
+
+        async function acceptFriend(requesterId) {
+          try {
+            // Disable buttons during request
+            const requestEl = document.querySelector(`[data-request-id="${requesterId}"]`);
+            if (requestEl) {
+              const buttons = requestEl.querySelectorAll('button');
+              buttons.forEach(btn => btn.disabled = true);
+            }
+
+            const data = await window.electronAPI.apiCall('/users/accept-friend', {
+              method: 'POST',
+              body: JSON.stringify({ requesterId })
+            });
+            
+            if (data.success) {
+              // Show success feedback
+              if (requestEl) {
+                requestEl.style.backgroundColor = '#57f287';
+                requestEl.innerHTML = `<div class="request-accepted">✓ Friend request accepted!</div>`;
+                setTimeout(async () => {
+                  await loadFriendRequests();
+                  await loadFriends();
+                }, 1500);
+              } else {
+                await loadFriendRequests();
+                await loadFriends();
+              }
+            } else {
+              // Re-enable buttons on failure
+              if (requestEl) {
+                const buttons = requestEl.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = false);
+              }
+              console.error('Failed to accept friend:', data.message);
+            }
+          } catch (error) {
+            console.error('Failed to accept friend:', error);
+            // Re-enable buttons on error
+            const requestEl = document.querySelector(`[data-request-id="${requesterId}"]`);
+            if (requestEl) {
+              const buttons = requestEl.querySelectorAll('button');
+              buttons.forEach(btn => btn.disabled = false);
+            }
+          }
+        }
+
+        async function rejectFriend(requesterId) {
+          try {
+            // Disable buttons during request
+            const requestEl = document.querySelector(`[data-request-id="${requesterId}"]`);
+            if (requestEl) {
+              const buttons = requestEl.querySelectorAll('button');
+              buttons.forEach(btn => btn.disabled = true);
+            }
+
+            const data = await window.electronAPI.apiCall('/users/reject-friend', {
+              method: 'POST',
+              body: JSON.stringify({ requesterId })
+            });
+            
+            if (data.success) {
+              // Show rejection feedback
+              if (requestEl) {
+                requestEl.style.backgroundColor = '#ed4245';
+                requestEl.innerHTML = `<div class="request-rejected">✗ Friend request rejected</div>`;
+                setTimeout(async () => {
+                  await loadFriendRequests();
+                }, 1500);
+              } else {
+                await loadFriendRequests();
+              }
+            } else {
+              // Re-enable buttons on failure
+              if (requestEl) {
+                const buttons = requestEl.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = false);
+              }
+              console.error('Failed to reject friend:', data.message);
+            }
+          } catch (error) {
+            console.error('Failed to reject friend:', error);
+            // Re-enable buttons on error
+            const requestEl = document.querySelector(`[data-request-id="${requesterId}"]`);
+            if (requestEl) {
+              const buttons = requestEl.querySelectorAll('button');
+              buttons.forEach(btn => btn.disabled = false);
+            }
+          }
+        }
+
+        function showUnfriendModal(friendId, friendUsername) {
+          window.unfriendTarget = { id: friendId, username: friendUsername };
+          document.getElementById('unfriend-username').textContent = friendUsername;
+          document.getElementById('unfriend-modal').classList.add('active');
+          document.getElementById('unfriend-error').textContent = '';
+        }
+
+        async function confirmUnfriend() {
+          if (!window.unfriendTarget) return;
+          
+          try {
+            const data = await window.electronAPI.apiCall('/users/unfriend', {
+              method: 'POST',
+              body: JSON.stringify({ friendId: window.unfriendTarget.id })
+            });
+            
+            if (data.success) {
+              document.getElementById('unfriend-modal').classList.remove('active');
+              await loadFriends();
+              
+              // If we're currently chatting with this friend, go back to home
+              if (window.currentFriend && window.currentFriend.id === window.unfriendTarget.id) {
+                document.getElementById('chat-view').classList.remove('active');
+                document.getElementById('home-view').classList.add('active');
+                window.currentFriend = null;
+              }
+            }
+          } catch (error) {
+            console.error('Failed to unfriend:', error);
+            document.getElementById('unfriend-error').textContent = error.message;
+          }
+        }
+
+        function openChat(friend) {
+          console.log('Opening chat with:', friend.username);
+          
+          // Set current friend globally
+          window.currentFriend = friend;
+          
+          document.getElementById('home-view').classList.remove('active');
+          document.getElementById('chat-view').classList.add('active');
+          document.getElementById('chat-friend-name').textContent = friend.username;
+          
+          // Update sidebar selection
+          document.querySelectorAll('.friend-item').forEach(item => item.classList.remove('active'));
+          document.querySelector(`[data-friend-id="${friend.id}"]`)?.classList.add('active');
+          
+          loadConversation(friend.id);
+        }
+
+        async function loadConversation(friendId) {
+          try {
+            const data = await window.electronAPI.apiCall(`/messages/conversation/${friendId}`);
+            if (data.success) {
+              const chatMessages = document.getElementById('chat-messages');
+              chatMessages.innerHTML = '';
+              
+              data.messages.forEach(message => {
+                const messageEl = document.createElement('div');
+                messageEl.className = 'message';
+                messageEl.setAttribute('data-message-id', message.id);
+                
+                const time = new Date(message.created_at).toLocaleTimeString();
+                const isOwnMessage = message.sender_id === window.currentUserId;
+                
+                messageEl.classList.add(isOwnMessage ? 'message-own' : 'message-other');
+                
+                messageEl.innerHTML = `
+                  <div class="message-header">
+                    <span class="message-author">${message.sender_username}</span>
+                    <span class="message-time">${time}</span>
+                  </div>
+                  <div class="message-content">${message.message_text}</div>
+                `;
+                chatMessages.appendChild(messageEl);
+              });
+              
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+          } catch (error) {
+            console.error('Failed to load conversation:', error);
+          }
+        }
+
+        // Event listeners for main app
+        function setupMainAppListeners() {
+          // Home button
+          document.getElementById('home-btn')?.addEventListener('click', () => {
+            document.getElementById('chat-view').classList.remove('active');
+            document.getElementById('home-view').classList.add('active');
+            document.querySelectorAll('.friend-item').forEach(item => item.classList.remove('active'));
+          });
+
+          // Logout button
+          document.getElementById('logout-btn')?.addEventListener('click', () => {
+            // Disconnect WebSocket and clear intervals
+            if (socket) {
+              socket.disconnect();
+              socket = null;
+            }
+            if (window.friendRefreshInterval) {
+              clearInterval(window.friendRefreshInterval);
+              window.friendRefreshInterval = null;
+            }
+            window.electronAPI.removeItem('auth_token');
+            document.getElementById('app-screen').classList.remove('active');
+            document.getElementById('auth-screen').classList.add('active');
+          });
+
+          // Add friend button
+          document.getElementById('add-friend-btn')?.addEventListener('click', () => {
+            document.getElementById('add-friend-modal').classList.add('active');
+          });
+
+          // Modal close buttons
+          document.getElementById('close-modal')?.addEventListener('click', () => {
+            document.getElementById('add-friend-modal').classList.remove('active');
+          });
+
+          document.getElementById('cancel-add-friend')?.addEventListener('click', () => {
+            document.getElementById('add-friend-modal').classList.remove('active');
+          });
+
+          // Unfriend modal close buttons
+          document.getElementById('close-unfriend-modal')?.addEventListener('click', () => {
+            document.getElementById('unfriend-modal').classList.remove('active');
+          });
+
+          document.getElementById('cancel-unfriend')?.addEventListener('click', () => {
+            document.getElementById('unfriend-modal').classList.remove('active');
+          });
+
+          document.getElementById('confirm-unfriend')?.addEventListener('click', confirmUnfriend);
+
+          // Add friend confirmation
+          document.getElementById('confirm-add-friend')?.addEventListener('click', async () => {
+            const friendCode = document.getElementById('friend-code-input').value;
+            try {
+              const data = await window.electronAPI.apiCall('/users/add-friend', {
+                method: 'POST',
+                body: JSON.stringify({ friendCode })
+              });
+              
+              if (data.success) {
+                document.getElementById('add-friend-modal').classList.remove('active');
+                document.getElementById('friend-code-input').value = '';
+                await loadFriends();
+              }
+            } catch (error) {
+              document.getElementById('add-friend-error').textContent = error.message;
+            }
+          });
+
+          // Send message button
+          document.getElementById('send-message-btn')?.addEventListener('click', async () => {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            console.log('Send button clicked:', { 
+              message, 
+              currentFriend: window.currentFriend, 
+              socket: !!socket, 
+              currentUserId: window.currentUserId 
+            });
+            
+            if (message && window.currentFriend && socket && window.currentUserId) {
+              // Clear input immediately for better UX
+              messageInput.value = '';
+              
+              console.log('Sending message via WebSocket...');
+              
+              // Send via WebSocket for real-time delivery
+              socket.emit('send-message', {
+                senderId: window.currentUserId,
+                recipientId: window.currentFriend.id,
+                message: message,
+                messageType: 'text'
+              });
+            } else {
+              console.error('Cannot send message. Missing:', {
+                hasMessage: !!message,
+                hasFriend: !!window.currentFriend,
+                hasSocket: !!socket,
+                hasUserId: !!window.currentUserId
+              });
+            }
+          });
+
+          // Send message on Enter
+          document.getElementById('message-input')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+              document.getElementById('send-message-btn').click();
+            }
+          });
+
+          // Typing indicator (optional)
+          let typingTimeout;
+          document.getElementById('message-input')?.addEventListener('input', (e) => {
+            if (window.currentFriend && socket && e.target.value.trim() && window.currentUserId) {
+              socket.emit('typing', {
+                senderId: window.currentUserId,
+                recipientId: window.currentFriend.id
+              });
+              
+              clearTimeout(typingTimeout);
+              typingTimeout = setTimeout(() => {
+                socket.emit('stop-typing', {
+                  senderId: window.currentUserId,
+                  recipientId: window.currentFriend.id
+                });
+              }, 1000);
+            }
+          });
+
+          // File sending
+          document.getElementById('send-file-btn')?.addEventListener('click', async () => {
+            if (window.currentFriend) {
+              try {
+                const filePath = await window.electronAPI.selectFile();
+                if (filePath) {
+                  const fileName = filePath.split('/').pop() || filePath.split('\\').pop();
+                  await window.electronAPI.apiCall('/messages/send', {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                      recipientId: window.currentFriend.id, 
+                      message: `📎 File: ${fileName}`,
+                      messageType: 'file'
+                    })
+                  });
+                  await loadConversation(window.currentFriend.id);
+                }
+              } catch (error) {
+                console.error('File selection failed:', error);
+              }
+            }
+          });
+        }
+
+        // Set up main app listeners immediately
+        setupMainAppListeners();
+
+        // Set up window control listeners
+        document.getElementById('minimize-btn')?.addEventListener('click', () => {
+          window.electronAPI.minimizeWindow();
+        });
+
+        document.getElementById('maximize-btn')?.addEventListener('click', () => {
+          window.electronAPI.maximizeWindow();
+        });
+
+        document.getElementById('close-btn')?.addEventListener('click', () => {
+          window.electronAPI.closeWindow();
+        });
+
+        // Make functions globally accessible
+        window.openChat = openChat;
+        window.loadFriends = loadFriends;
+        window.loadFriendRequests = loadFriendRequests;
+        window.acceptFriend = acceptFriend;
+        window.rejectFriend = rejectFriend;
+        window.showUnfriendModal = showUnfriendModal;
+        window.confirmUnfriend = confirmUnfriend;
+        window.currentFriend = null;
+        window.unfriendTarget = null;
+        window.socket = null;
+        window.initializeWebSocket = initializeWebSocket;
+      });
+    </script>
   </body>
 </html>

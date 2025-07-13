@@ -11,5 +11,10 @@
     "outDir": "dist",
     "moduleResolution": "node",
     "resolveJsonModule": true
-  }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/renderer.d.ts",
+    "forge.env.d.ts"
+  ]
 }
